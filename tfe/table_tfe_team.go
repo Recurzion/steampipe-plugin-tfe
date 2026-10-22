@@ -35,13 +35,6 @@ func tableTfeTeam(ctx context.Context) *plugin.Table {
 }
 
 func listTeam(ctx context.Context, d *plugin.QueryData, h *plugin.HydrateData) (interface{}, error) {
-	return listTeams(ctx, d, h, func(team *tfe.Team) error {
-		d.StreamListItem(ctx, team)
-		return nil
-	})
-}
-
-func listTeams(ctx context.Context, d *plugin.QueryData, h *plugin.HydrateData, stream func(*tfe.Team) error) (interface{}, error) {
 	conn, err := connect(ctx, d)
 	if err != nil {
 		plugin.Logger(ctx).Error("tfe_team.listTeam", "connection_error", err)
@@ -75,9 +68,7 @@ func listTeams(ctx context.Context, d *plugin.QueryData, h *plugin.HydrateData, 
 			return nil, err
 		}
 		for _, i := range result.Items {
-			if err := stream(i); err != nil {
-				return nil, err
-			}
+			d.StreamListItem(ctx, i)
 			// Context can be cancelled due to manual cancellation or the limit has been hit
 			if d.RowsRemaining(ctx) == 0 {
 				return nil, nil

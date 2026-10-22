@@ -2,7 +2,6 @@ package tfe
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/hashicorp/go-tfe"
 	"github.com/turbot/steampipe-plugin-sdk/v5/grpc/proto"
@@ -49,28 +48,10 @@ func listTeamToken(ctx context.Context, d *plugin.QueryData, h *plugin.HydrateDa
 	for {
 		result, err := conn.TeamTokens.List(ctx, organizationName, &options)
 		if err != nil {
-			if options.PageNumber == 0 && isNotFoundError(err) {
-				plugin.Logger(ctx).Debug("tfe_team_token.listTeamToken", "legacy_fallback", "Team token listing is unavailable; reading tokens by team.")
-				return listTeams(ctx, d, h, func(team *tfe.Team) error {
-					token, err := getLegacyTeamToken(ctx, d, team)
-					if err != nil {
-						return err
-					}
-					if token != nil {
-						d.StreamListItem(ctx, token)
-					}
-					return nil
-				})
-			}
 			plugin.Logger(ctx).Error("tfe_team_token.listTeamToken", "query_error", err)
 			return nil, err
 		}
 		for _, token := range result.Items {
-			if token.Team == nil || token.Team.ID == "" {
-				err := fmt.Errorf("team token %s has no team relationship", token.ID)
-				plugin.Logger(ctx).Error("tfe_team_token.listTeamToken", "query_error", err)
-				return nil, err
-			}
 			d.StreamListItem(ctx, token)
 			if d.RowsRemaining(ctx) == 0 {
 				return nil, nil
@@ -81,22 +62,4 @@ func listTeamToken(ctx context.Context, d *plugin.QueryData, h *plugin.HydrateDa
 		}
 		options.PageNumber = result.Pagination.NextPage
 	}
-}
-
-func getLegacyTeamToken(ctx context.Context, d *plugin.QueryData, team *tfe.Team) (*tfe.TeamToken, error) {
-	conn, err := connect(ctx, d)
-	if err != nil {
-		plugin.Logger(ctx).Error("tfe_team_token.getLegacyTeamToken", "connection_error", err)
-		return nil, err
-	}
-	result, err := conn.TeamTokens.Read(ctx, team.ID)
-	if err != nil {
-		if isNotFoundError(err) {
-			return nil, nil
-		}
-		plugin.Logger(ctx).Error("tfe_team_token.getLegacyTeamToken", "query_error", err)
-		return nil, err
-	}
-	result.Team = team
-	return result, nil
 }
